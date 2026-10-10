@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +35,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.listacompra.ui.theme.ListaCompraTheme
 
+// Modelo de dados representando cada produto cadastrado
 data class Produto(
     val nome: String,
     val preco: Double,
@@ -57,25 +59,39 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Função principal da tela (Componente Pai).
+ * Aplica o conceito de State Hoisting (Elevação de Estado):
+ * - Mantém e controla todos os estados da tela (nome, preco, quantidade com mutableStateOf, e produtos com mutableStateListOf).
+ * - Os DADOS DESCEM da função pai para os filhos como parâmetros.
+ * - As AÇÕES SOBEM dos filhos para o pai através de funções lambda.
+ */
 @Composable
 fun ListaCompraScreen(modifier: Modifier = Modifier) {
+    // Controle de estados no componente pai
     var nome by remember { mutableStateOf("") }
     var preco by remember { mutableStateOf("") }
     var quantidade by remember { mutableStateOf("") }
-    var total by remember { mutableStateOf(0.0) }
     val produtos = remember { mutableStateListOf<Produto>() }
 
+    // Cálculo do valor total derivado da lista de produtos
+    val total = produtos.sumOf { it.totalItem }
+
+    // Lógica de negócio e cadastro mantida no componente pai
     val onCadastrar = {
         val precoDouble = preco.toDoubleOrNull() ?: 0.0
         val quantidadeInt = quantidade.toIntOrNull() ?: 0
+
         if (nome.isNotBlank() && precoDouble > 0 && quantidadeInt > 0) {
             val novoProduto = Produto(
                 nome = nome,
                 preco = precoDouble,
                 quantidade = quantidadeInt
             )
+            // Adiciona o produto na lista observável
             produtos.add(novoProduto)
-            total = produtos.sumOf { it.preco * it.quantidade }
+
+            // Limpa os campos de texto no estado pai
             nome = ""
             preco = ""
             quantidade = ""
@@ -87,29 +103,40 @@ fun ListaCompraScreen(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // FORMULÁRIO:
+        // Os valores atuais dos campos descem como parâmetros.
+        // As ações sobem via lambdas enviando os novos valores (it) para atualizar os estados no pai.
         Formulario(
             nome = nome,
             preco = preco,
             quantidade = quantidade,
-            onNomeChange = { nome = it },
-            onPrecoChange = { preco = it },
-            onQuantidadeChange = { quantidade = it },
+            onNomeChange = { novoNome -> nome = novoNome },
+            onPrecoChange = { novoPreco -> preco = novoPreco },
+            onQuantidadeChange = { novaQuantidade -> quantidade = novaQuantidade },
             onCadastrar = onCadastrar
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // RESUMO:
+        // O valor numérico 'total' desce do pai como parâmetro.
         Resumo(total = total)
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ListaProdutos(
-            produtos = produtos,
-            modifier = Modifier.weight(1f)
-        )
+        // LISTA DE PRODUTOS:
+        // A lista de produtos desce do pai como parâmetro.
+        Box(modifier = Modifier.weight(1f)) {
+            ListaProdutos(produtos = produtos)
+        }
     }
 }
 
+/**
+ * Composable responsável pela entrada de dados do formulário.
+ * Recebe os valores atuais dos campos de texto e lambdas para propagar ações.
+ * O botão apenas chama onCadastrar sem processar regras de negócio.
+ */
 @Composable
 fun Formulario(
     nome: String,
@@ -118,13 +145,13 @@ fun Formulario(
     onNomeChange: (String) -> Unit,
     onPrecoChange: (String) -> Unit,
     onQuantidadeChange: (String) -> Unit,
-    onCadastrar: () -> Unit,
-    modifier: Modifier = Modifier
+    onCadastrar: () -> Unit
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = nome,
-            onValueChange = onNomeChange,
+            // A ação sobe para o pai transferindo o novo valor (it) através da lambda
+            onValueChange = { onNomeChange(it) },
             label = { Text("Nome do Produto") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
@@ -133,7 +160,8 @@ fun Formulario(
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = preco,
-                onValueChange = onPrecoChange,
+                // A ação sobe para o pai transferindo o novo valor (it) através da lambda
+                onValueChange = { onPrecoChange(it) },
                 label = { Text("Preço (R$)") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
@@ -142,7 +170,8 @@ fun Formulario(
             Spacer(modifier = Modifier.padding(horizontal = 4.dp))
             OutlinedTextField(
                 value = quantidade,
-                onValueChange = onQuantidadeChange,
+                // A ação sobe para o pai transferindo o novo valor (it) através da lambda
+                onValueChange = { onQuantidadeChange(it) },
                 label = { Text("Quantidade") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
@@ -151,6 +180,7 @@ fun Formulario(
         }
         Spacer(modifier = Modifier.height(8.dp))
         Button(
+            // O botão executa apenas a ação recebida, sem regras de negócio locais
             onClick = onCadastrar,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -159,13 +189,14 @@ fun Formulario(
     }
 }
 
+/**
+ * Composable responsável por exibir o resumo do total da compra.
+ * Recebe apenas o valor numérico (total) como parâmetro.
+ */
 @Composable
-fun Resumo(
-    total: Double,
-    modifier: Modifier = Modifier
-) {
+fun Resumo(total: Double) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
@@ -184,12 +215,13 @@ fun Resumo(
     }
 }
 
+/**
+ * Composable responsável por exibir a lista de produtos cadastrados.
+ * Recebe apenas a lista de itens (produtos) como parâmetro.
+ */
 @Composable
-fun ListaProdutos(
-    produtos: List<Produto>,
-    modifier: Modifier = Modifier
-) {
-    LazyColumn(modifier = modifier.fillMaxWidth()) {
+fun ListaProdutos(produtos: List<Produto>) {
+    LazyColumn(modifier = Modifier.fillMaxWidth()) {
         items(produtos) { produto ->
             Card(
                 modifier = Modifier
